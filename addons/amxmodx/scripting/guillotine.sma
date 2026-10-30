@@ -8,10 +8,10 @@
 *	Cvars:
 *		None
 *
-*	Commands:
-*       say /guillotine [name]             "Opens the Guillotine menu or executes the specified player."
-*       say_team /guillotine [name]        "Opens the Guillotine menu or executes the specified player."
-*       guillotine_reload                  "Reloads the configuration file."
+*   Commands:
+*       say /guillotine [name | all]       "Opens the Guillotine menu or executes the specified player(s)."
+*       say_team /guillotine [name | all]  "Opens the Guillotine menu or executes the specified player(s)."
+*       guillotine_reload                 "Reloads the configuration file."
 *
 *	Changelog:
 *       v1.0: Initial release.
@@ -383,24 +383,24 @@ public cmdMenu(id, iLevel, iCmd)
     new eGuillotine[GUILLOTINE], bool:bFoundGuillotine
     new Float:fCurrentTime = get_gametime()
     new iArgIndex = 2
-
+    new bool:bProcessed[33]
     while ( szTarget[0] )
     {
-        new iTarget = cmd_target(id, szTarget, CMDTARGET_OBEY_IMMUNITY | CMDTARGET_ALLOW_SELF)
-        if ( iTarget )
+        if ( equali(szTarget, "all") )
         {
-            if ( !is_user_alive(iTarget) )
+            for ( new iTarget = 1; iTarget <= g_iMaxPlayers; iTarget ++ )
             {
-                client_print_color(id, id, "%L %L", id, "GUILLOTINE_CHAT_TAG", id, "GUILLOTINE_CHAT_NOT_ALIVE")
-            }
-            else
-            {
-                bFoundGuillotine = false
+                if ( !is_user_connected(iTarget) || bProcessed[iTarget] )
+                    continue
 
+                bProcessed[iTarget] = true
+                if ( !is_user_alive(iTarget) )
+                    continue
+
+                bFoundGuillotine = false
                 for ( new iItem = 0; iItem < g_iGuillotine; iItem ++ )
                 {
                     ArrayGetArray(g_aGuillotine, iItem, eGuillotine)
-
                     if ( eGuillotine[GUILLOTINE_FLAGS] & FLAG_USED )
                         continue
 
@@ -408,7 +408,6 @@ public cmdMenu(id, iLevel, iCmd)
                     eGuillotine[GUILLOTINE_FLAGS] |= FLAG_USED
                     eGuillotine[GUILLOTINE_NEXT_ACTIVE] = fCurrentTime + random_float(eGuillotine[GUILLOTINE_COOLDOWN][0], eGuillotine[GUILLOTINE_COOLDOWN][1])
                     ArraySetArray(g_aGuillotine, iItem, eGuillotine)
-
                     bFoundGuillotine = true
                     break
                 }
@@ -417,6 +416,41 @@ public cmdMenu(id, iLevel, iCmd)
                 {
                     client_print_color(id, id, "%L %L", id, "GUILLOTINE_CHAT_TAG", id, "GUILLOTINE_CHAT_NO_GALLOWS")
                     break
+                }
+            }
+        }
+        else
+        {
+            new iTarget = cmd_target(id, szTarget, CMDTARGET_OBEY_IMMUNITY | CMDTARGET_ALLOW_SELF)
+            if ( iTarget && !bProcessed[iTarget] )
+            {
+                bProcessed[iTarget] = true
+                if ( !is_user_alive(iTarget) )
+                {
+                    client_print_color(id, id, "%L %L", id, "GUILLOTINE_CHAT_TAG", id, "GUILLOTINE_CHAT_NOT_ALIVE")
+                }
+                else
+                {
+                    bFoundGuillotine = false
+                    for ( new iItem = 0; iItem < g_iGuillotine; iItem ++ )
+                    {
+                        ArrayGetArray(g_aGuillotine, iItem, eGuillotine)
+                        if ( eGuillotine[GUILLOTINE_FLAGS] & FLAG_USED )
+                            continue
+
+                        guillotineHead(eGuillotine, iTarget, true)
+                        eGuillotine[GUILLOTINE_FLAGS] |= FLAG_USED
+                        eGuillotine[GUILLOTINE_NEXT_ACTIVE] = fCurrentTime + random_float(eGuillotine[GUILLOTINE_COOLDOWN][0], eGuillotine[GUILLOTINE_COOLDOWN][1])
+                        ArraySetArray(g_aGuillotine, iItem, eGuillotine)
+                        bFoundGuillotine = true
+                        break
+                    }
+
+                    if ( !bFoundGuillotine )
+                    {
+                        client_print_color(id, id, "%L %L", id, "GUILLOTINE_CHAT_TAG", id, "GUILLOTINE_CHAT_NO_GALLOWS")
+                        break
+                    }
                 }
             }
         }
