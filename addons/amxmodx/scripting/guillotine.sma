@@ -20,10 +20,7 @@
 
 #include <amxmodx>
 #include <amxmisc>
-#include <cstrike>
-#include <engine>
 #include <fakemeta>
-#include <fun>
 #include <hamsandwich>
 #include <xs>
 
@@ -309,8 +306,6 @@ new Array:g_aGuillotine,
     g_iGuillotine, g_iGuillotineConfig, g_iBarTime, Float:g_iHudCurrentY,
     g_iMaxPlayers, g_iSilentVictim
 
-new const g_iColorActive[] = { 0, 255, 0 }
-new const g_iColorInactive[] = { 255, 0, 0 }
 new Float:g_fHeadOffset[] = { 2.5, 0.0, -22.0 }
 new g_szModelRPG[MAX_RESOURCE_PATH_LENGTH] = "models/w_rpg.mdl"
 new Float:g_fHeadSize[][] = { {-7.5, -7.5, -7.5}, {7.5, 7.5, 7.5} }
@@ -729,10 +724,10 @@ public menuRoot(id, iMenu)
 
     menu_addblank2(iMenu)
 
-    formatex(szItem, charsmax(szItem), "%L", id, "GUILLOTINE_ROOT_NOCLIP", id, get_user_noclip(id) ? "GUILLOTINE_ON" : "GUILLOTINE_OFF")
+    formatex(szItem, charsmax(szItem), "%L", id, "GUILLOTINE_ROOT_NOCLIP", id, (pev(id, pev_movetype) == MOVETYPE_NOCLIP) ? "GUILLOTINE_ON" : "GUILLOTINE_OFF")
     menu_additem(iMenu, szItem)
 
-    formatex(szItem, charsmax(szItem), "%L", id, "GUILLOTINE_ROOT_GODMODE", id, get_user_godmode(id) ? "GUILLOTINE_ON" : "GUILLOTINE_OFF")
+    formatex(szItem, charsmax(szItem), "%L", id, "GUILLOTINE_ROOT_GODMODE", id, (pev(id, pev_takedamage) == DAMAGE_NO) ? "GUILLOTINE_ON" : "GUILLOTINE_OFF")
     menu_additem(iMenu, szItem)
 }
 
@@ -1390,7 +1385,7 @@ public guillotineTask()
 
 stock guillotineCreate(id, iItem)
 {
-    new iEnt = cs_create_entity("info_target")
+    new iEnt = engfunc(EngFunc_CreateNamedEntity, engfunc(EngFunc_AllocString, "info_target"))
     if ( !pev_valid(iEnt) )
         return
 
@@ -1426,7 +1421,7 @@ stock guillotineCreate(id, iItem)
 
 stock guillotineCreateHead(eGuillotine[GUILLOTINE])
 {
-    new iHead = cs_create_entity("info_target")
+    new iHead = engfunc(EngFunc_CreateNamedEntity, engfunc(EngFunc_AllocString, "info_target"))
     if ( !pev_valid(iHead) )
         return 0
 
@@ -1640,7 +1635,7 @@ stock LoadDataGuillotine(iItem, iFlags, Float:fOrigin[3], Float:fAngles[3], iCou
 
 public guillotineNoClip(id)
 {
-    set_user_noclip(id, !get_user_noclip(id))
+    set_pev(id, pev_movetype, pev(id, pev_movetype) == MOVETYPE_NOCLIP ? MOVETYPE_WALK : MOVETYPE_NOCLIP)
 
     guillotineSound(id, SOUND_MENU_NAV)
     guillotineMenu(id, MENU_ROOT)
@@ -1648,7 +1643,9 @@ public guillotineNoClip(id)
 
 public guillotineGodMode(id)
 {
-    set_user_godmode(id, !get_user_godmode(id))
+    new Float:flTakeDamage
+    pev(id, pev_takedamage, flTakeDamage)
+    set_pev(id, pev_takedamage, flTakeDamage == DAMAGE_NO ? DAMAGE_AIM : DAMAGE_NO)
 
     guillotineSound(id, SOUND_MENU_NAV)
     guillotineMenu(id, MENU_ROOT)
@@ -1667,7 +1664,7 @@ public fwdUse(iEnt, iCaller, iActivator, iType, Float:fValue)
     new Float:fCurrentTime = get_gametime()
     if ( !(eGuillotine[GUILLOTINE_FLAGS] & FLAG_ACTIVE)
     || (eGuillotine[GUILLOTINE_FLAGS] & FLAG_USED)
-    || !(CsTeams:eGuillotine[GUILLOTINE_TEAM] & cs_get_user_team(iActivator))
+    || !(eGuillotine[GUILLOTINE_TEAM] & get_user_team(iActivator))
     || fCurrentTime < eGuillotine[GUILLOTINE_NEXT_ACTIVE] )
         return HAM_IGNORED
 
@@ -2077,25 +2074,35 @@ stock guillotineBar(id, iDuration)
 
 stock guillotineSelect(eGuillotine[GUILLOTINE], iAction)
 {
-    new iRenderColor[3]
     if ( iAction == TARGET_SELECT )
     {
-        if ( eGuillotine[GUILLOTINE_FLAGS] & FLAG_ACTIVE )  { iRenderColor[0] = g_iColorActive[0];    iRenderColor[1] = g_iColorActive[1];    iRenderColor[2] = g_iColorActive[2]; }
-        else                                                { iRenderColor[0] = g_iColorInactive[0];  iRenderColor[1] = g_iColorInactive[1];  iRenderColor[2] = g_iColorInactive[2]; }
+        if ( eGuillotine[GUILLOTINE_FLAGS] & FLAG_ACTIVE )  { set_pev(eGuillotine[GUILLOTINE_ID], pev_rendercolor, Float:{0.0, 255.0, 0.0}); }
+        else                                                { set_pev(eGuillotine[GUILLOTINE_ID], pev_rendercolor, Float:{255.0, 0.0, 0.0}); }
 
-        set_ent_rendering(eGuillotine[GUILLOTINE_ID], kRenderFxGlowShell, iRenderColor[0], iRenderColor[1], iRenderColor[2], kRenderTransAlpha, 16)
+        set_pev(eGuillotine[GUILLOTINE_ID], pev_renderfx, kRenderFxGlowShell)
+        set_pev(eGuillotine[GUILLOTINE_ID], pev_rendermode, kRenderTransAlpha)
+        set_pev(eGuillotine[GUILLOTINE_ID], pev_renderamt, 16.0)
     }
     else if ( iAction == TARGET_GHOST )
     {
-        set_ent_rendering(eGuillotine[GUILLOTINE_ID], kRenderFxNone, 255, 255, 255, kRenderTransAlpha, GUILLOTINE_GHOST_ALPHA)
+        set_pev(eGuillotine[GUILLOTINE_ID], pev_renderfx, kRenderFxNone)
+        set_pev(eGuillotine[GUILLOTINE_ID], pev_rendercolor, Float:{255.0, 255.0, 255.0})
+        set_pev(eGuillotine[GUILLOTINE_ID], pev_rendermode, kRenderTransAlpha)
+        set_pev(eGuillotine[GUILLOTINE_ID], pev_renderamt, float(GUILLOTINE_GHOST_ALPHA))
     }
     else if ( iAction == TARGET_HIDE )
     {
-        set_ent_rendering(eGuillotine[GUILLOTINE_ID], kRenderFxNone, 255, 255, 255, kRenderTransAlpha, 0)
+        set_pev(eGuillotine[GUILLOTINE_ID], pev_renderfx, kRenderFxNone)
+        set_pev(eGuillotine[GUILLOTINE_ID], pev_rendercolor, Float:{255.0, 255.0, 255.0})
+        set_pev(eGuillotine[GUILLOTINE_ID], pev_rendermode, kRenderTransAlpha)
+        set_pev(eGuillotine[GUILLOTINE_ID], pev_renderamt, 0.0)
     }
     else if ( iAction == TARGET_CLEAR )
     {
-        set_ent_rendering(eGuillotine[GUILLOTINE_ID], kRenderFxNone, 255, 255, 255, kRenderNormal, 255)
+        set_pev(eGuillotine[GUILLOTINE_ID], pev_renderfx, kRenderFxNone)
+        set_pev(eGuillotine[GUILLOTINE_ID], pev_rendercolor, Float:{255.0, 255.0, 255.0})
+        set_pev(eGuillotine[GUILLOTINE_ID], pev_rendermode, kRenderNormal)
+        set_pev(eGuillotine[GUILLOTINE_ID], pev_renderamt, 255.0)
     }
 }
 
