@@ -29,7 +29,7 @@ GUILLOTINE_HIDDEN                                  = \r[HIDDEN]
 GUILLOTINE_ENABLED                                 = \y[ENABLED]
 GUILLOTINE_DISABLED                                = \r[DISABLED]
 
-GUILLOTINE_MENU_TITLE                              = \dHangman - Version \y%s
+GUILLOTINE_MENU_TITLE                              = \Guillotine - Version \y%s
 GUILLOTINE_MENU_TITLE_PAGE                         = \yPage:\r
 GUILLOTINE_ROOT_CREATE                             = Create Guillotine
 GUILLOTINE_ROOT_EDIT                               = Edit Guillotine
