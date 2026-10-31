@@ -376,7 +376,6 @@ public cmdMenu(id, iLevel, iCmd)
     }
 
     new eGuillotine[GUILLOTINE], bool:bFoundGuillotine
-    new Float:fCurrentTime = get_gametime()
     new iArgIndex = 2
     new bool:bProcessed[33]
     while ( szTarget[0] )
@@ -400,8 +399,6 @@ public cmdMenu(id, iLevel, iCmd)
                         continue
 
                     guillotineHead(eGuillotine, iTarget, true)
-                    eGuillotine[GUILLOTINE_FLAGS] |= FLAG_USED
-                    eGuillotine[GUILLOTINE_NEXT_ACTIVE] = fCurrentTime + random_float(eGuillotine[GUILLOTINE_COOLDOWN][0], eGuillotine[GUILLOTINE_COOLDOWN][1])
                     ArraySetArray(g_aGuillotine, iItem, eGuillotine)
                     bFoundGuillotine = true
                     break
@@ -434,8 +431,6 @@ public cmdMenu(id, iLevel, iCmd)
                             continue
 
                         guillotineHead(eGuillotine, iTarget, true)
-                        eGuillotine[GUILLOTINE_FLAGS] |= FLAG_USED
-                        eGuillotine[GUILLOTINE_NEXT_ACTIVE] = fCurrentTime + random_float(eGuillotine[GUILLOTINE_COOLDOWN][0], eGuillotine[GUILLOTINE_COOLDOWN][1])
                         ArraySetArray(g_aGuillotine, iItem, eGuillotine)
                         bFoundGuillotine = true
                         break
@@ -2045,6 +2040,8 @@ stock guillotineHead(eGuillotine[GUILLOTINE], id, bool:bForced = false)
     guillotineStrip(id)
     guillotineHeadOffset(eGuillotine, id)
     guillotineSetSeq(eGuillotine[GUILLOTINE_ID], GUILLOTINE_SEQ_DOWN, eGuillotine[GUILLOTINE_FRAMERATE])
+    eGuillotine[GUILLOTINE_FLAGS] |= FLAG_USED
+    eGuillotine[GUILLOTINE_NEXT_ACTIVE] = get_gametime() + random_float(eGuillotine[GUILLOTINE_COOLDOWN][0], eGuillotine[GUILLOTINE_COOLDOWN][1])
     g_ePlayerData[id][PDATA_GUILLOTINE_ID] = eGuillotine[GUILLOTINE_ID]
     g_ePlayerData[id][PDATA_GUILLOTINE_HELD] = true
     g_ePlayerData[id][PDATA_NEXT_DIE] = get_gametime() + (GUILLOTINE_SEQ_DURATION / g_eSettings[SETTING_DEFAULT_FRAMERATE])
