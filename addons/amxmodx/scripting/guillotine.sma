@@ -66,7 +66,7 @@
 #define GUILLOTINE_SEQ_DURATION         0.858
 #define GUILLOTINE_SEQ_DOWN             0
 #define GUILLOTINE_SEQ_UP               1
-#define HEAD_FORWARD_OFFSET             20.0
+#define HEAD_FORWARD_OFFSET             22.5
 #define HEAD_DAMPING_FACTOR             0.82
 #define SOUND_NAV                       "buttons/blip1.wav"
 #define SOUND_REMOVE                    "buttons/button10.wav"
