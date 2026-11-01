@@ -1351,9 +1351,6 @@ public guillotineTask()
 
     for ( new id = 1; id <= g_iMaxPlayers; id ++ )
     {
-        if ( !is_user_alive(id) )
-            continue
-
         if ( g_ePlayerData[id][PDATA_NEXT_HEAD] )
         {
             if ( fCurrentTime >= g_ePlayerData[id][PDATA_NEXT_HEAD] )
@@ -1380,8 +1377,7 @@ public guillotineTask()
             {
                 if ( (iItem = guillotineGet(eGuillotine, g_ePlayerData[id][PDATA_GUILLOTINE_ID])) != -1 )
                 {
-                    if ( eGuillotine[GUILLOTINE_FLAGS] & FLAG_USED
-                    && is_user_alive(id) )
+                    if ( eGuillotine[GUILLOTINE_FLAGS] & FLAG_USED && is_user_alive(id) )
                     {
                         engfunc(EngFunc_SetView, id, id)
                         set_pev(id, pev_flags, pev(id, pev_flags) & ~FL_FROZEN)
