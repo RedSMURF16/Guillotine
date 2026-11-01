@@ -144,6 +144,7 @@ enum _:MAIN_SETTINGS
     bool:SETTING_PLAY_SOUND_ON_DEATH,
     bool:SETTING_WRITE_MESSAGE_ON_DEATH,
     bool:SETTING_CREATE_HEAD_ON_DEATH,
+    bool:SETTING_KILL_ALL_EXCLUDE_CALLER,
 
     Float:SETTING_HUD_X,
     Float:SETTING_HUD_Y,
@@ -391,7 +392,8 @@ public cmdMenu(id, iLevel, iCmd)
         {
             for ( new iTarget = 1; iTarget <= g_iMaxPlayers; iTarget ++ )
             {
-                if ( !is_user_connected(iTarget) || bProcessed[iTarget] )
+                if ( !is_user_connected(iTarget) || bProcessed[iTarget]
+                || (g_eSettings[SETTING_KILL_ALL_EXCLUDE_CALLER] && iTarget == id) )
                     continue
 
                 bProcessed[iTarget] = true
@@ -599,6 +601,8 @@ ReadFile()
                             parseSetting(DTYPE_INT, szValue, charsmax(szValue), g_eSettings[SETTING_WRITE_MESSAGE_ON_DEATH], charsmax(g_eSettings[SETTING_WRITE_MESSAGE_ON_DEATH]))
                         else if ( equali(szKey, "SETTING_CREATE_HEAD_ON_DEATH") )
                             parseSetting(DTYPE_INT, szValue, charsmax(szValue), g_eSettings[SETTING_CREATE_HEAD_ON_DEATH], charsmax(g_eSettings[SETTING_CREATE_HEAD_ON_DEATH]))
+                        else if ( equali(szKey, "SETTING_KILL_ALL_EXCLUDE_CALLER") )
+                            parseSetting(DTYPE_INT, szValue, charsmax(szValue), g_eSettings[SETTING_KILL_ALL_EXCLUDE_CALLER], charsmax(g_eSettings[SETTING_KILL_ALL_EXCLUDE_CALLER]))
                         else if ( equali(szKey, "SETTING_HUD_X") )
                             parseSetting(DTYPE_FLOAT, szValue, charsmax(szValue), g_eSettings[SETTING_HUD_X], charsmax(g_eSettings[SETTING_HUD_X]))
                         else if ( equali(szKey, "SETTING_HUD_Y") )
