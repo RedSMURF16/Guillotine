@@ -181,8 +181,7 @@ enum _:GUILLOTINE
     Float:GUILLOTINE_MINS[3],
     Float:GUILLOTINE_MAXS[3],
 
-    Float:GUILLOTINE_NEXT_ACTIVE,
-    Float:GUILLOTINE_NEXT_KILL
+    Float:GUILLOTINE_NEXT_ACTIVE
 }
 
 enum _:PLAYER_DATA
@@ -1833,6 +1832,21 @@ public fwdKilled(id, iAttacker, bGib)
 
     if ( g_ePlayerData[id][PDATA_GUILLOTINE_HELD] )
         g_ePlayerData[id][PDATA_GUILLOTINE_HELD] = false
+
+    if ( g_ePlayerData[id][PDATA_NEXT_DIE] )
+    {
+        new eGuillotine[GUILLOTINE], iItem
+        if ( (iItem = guillotineGet(eGuillotine, g_ePlayerData[id][PDATA_GUILLOTINE_ID])) != -1 )
+        {
+            g_ePlayerData[id][PDATA_GUILLOTINE_ID] = 0
+            g_ePlayerData[id][PDATA_NEXT_DIE] = 0.0
+            eGuillotine[GUILLOTINE_FLAGS] &= ~FLAG_USED
+            eGuillotine[GUILLOTINE_NEXT_ACTIVE] = get_gametime()
+            guillotineSetSeq(eGuillotine[GUILLOTINE_ID], GUILLOTINE_SEQ_UP, eGuillotine[GUILLOTINE_FRAMERATE])
+
+            ArraySetArray(g_aGuillotine, iItem, eGuillotine)
+        }
+    }
 }
 
 stock guillotineTrace(eGuillotine[GUILLOTINE], id)
