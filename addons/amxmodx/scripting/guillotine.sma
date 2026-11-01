@@ -8,10 +8,10 @@
 *	Cvars:
 *		None
 *
-*   Commands:
-*       say /guillotine [name | all]       "Opens the Guillotine menu or executes the specified player(s)."
-*       say_team /guillotine [name | all]  "Opens the Guillotine menu or executes the specified player(s)."
-*       guillotine_reload                 "Reloads the configuration file."
+*	Commands:
+*       say /guillotine [name]             "Opens the Guillotine menu or executes the specified player."
+*       say_team /guillotine [name]        "Opens the Guillotine menu or executes the specified player."
+*       guillotine_reload                  "Reloads the configuration file."
 *
 *	Changelog:
 *       v1.0: Initial release.
@@ -67,7 +67,7 @@
 #define GUILLOTINE_SEQ_DOWN             0
 #define GUILLOTINE_SEQ_UP               1
 #define HEAD_FORWARD_OFFSET             22.5
-#define HEAD_DAMPING_FACTOR             0.82
+#define HEAD_DAMPING_FACTOR             0.825
 #define SOUND_NAV                       "buttons/blip1.wav"
 #define SOUND_REMOVE                    "buttons/button10.wav"
 #define SOUND_ALERT                     "buttons/bell1.wav"
@@ -302,7 +302,7 @@ new Array:g_aGuillotine,
     g_eSettings[MAIN_SETTINGS],
     g_ePlayerData[MAX_PLAYERS + 1][PLAYER_DATA],
     bool:g_bFileWasRead, g_iActivePlayers,
-    HamHook:g_iFwdUse, HamHook:g_iFwdObjectCaps, HamHook:g_iFwdPreThink, HamHook:g_iFwdPostThink, HamHook:g_iFwdTouch,
+    g_iFwdEmitSound, HamHook:g_iFwdUse, HamHook:g_iFwdObjectCaps, HamHook:g_iFwdPreThink, HamHook:g_iFwdPostThink, HamHook:g_iFwdTouch,
     g_iGuillotine, g_iGuillotineConfig, g_iBarTime, Float:g_iHudCurrentY,
     g_iMaxPlayers, g_iSilentVictim
 
@@ -320,6 +320,7 @@ public plugin_init()
     register_concmd("guillotine_reload",  "cmdReload", ADMIN_ACCESS, "-- Reloads the configuration file")
     register_dictionary("Guillotine.txt")
 
+    g_iFwdEmitSound = register_forward(FM_EmitSound, "fwdEmitSound")
     g_iFwdUse = RegisterHam(Ham_Use, "info_target", "fwdUse")
     g_iFwdObjectCaps = RegisterHam(Ham_ObjectCaps, "info_target", "fwdObjectCaps")
     g_iFwdPreThink = RegisterHam(Ham_Player_PreThink, "player", "fwdPreThink")
@@ -658,6 +659,17 @@ stock guillotineInit()
     g_iHudCurrentY = g_eSettings[SETTING_HUD_Y]
     if ( g_eSettings[SETTING_GUILLOTINE_LOAD] )
         set_task(DELAY_ON_LOAD, "loadData")
+}
+
+stock guillotineTerminate()
+{
+    new eGuillotine[GUILLOTINE]
+    for ( new i = 0; i < g_iGuillotine; i ++ )
+    {
+        ArrayGetArray(g_aGuillotine, i, eGuillotine)
+        eGuillotine[GUILLOTINE_FLAGS] &= ~FLAG_USED
+        ArraySetArray(g_aGuillotine, i, eGuillotine)
+    }
 }
 
 stock guillotineMenu(id, iType)
@@ -1357,18 +1369,23 @@ public guillotineTask()
             {
                 if ( (iItem = guillotineGet(eGuillotine, g_ePlayerData[id][PDATA_GUILLOTINE_ID])) != -1 )
                 {
+                    if ( eGuillotine[GUILLOTINE_FLAGS] & FLAG_USED
+                    && is_user_alive(id) )
+                    {
+                        engfunc(EngFunc_SetView, id, id)
+                        set_pev(id, pev_flags, pev(id, pev_flags) & ~FL_FROZEN)
+                        set_pev(id, pev_movetype, MOVETYPE_WALK)
+
+                        g_iSilentVictim = id
+                        ExecuteHamB(Ham_Killed, id, id, GIB_ALWAYS)
+                        guillotineCreateHead(eGuillotine)
+                        guillotineSound(eGuillotine[GUILLOTINE_ID], SOUND_SLICE, false)
+                    }
+
                     g_ePlayerData[id][PDATA_GUILLOTINE_ID] = 0
                     g_ePlayerData[id][PDATA_NEXT_DIE] = 0.0
                     eGuillotine[GUILLOTINE_FLAGS] &= ~FLAG_USED
                     eGuillotine[GUILLOTINE_NEXT_ACTIVE] = fCurrentTime + random_float(eGuillotine[GUILLOTINE_COOLDOWN][0], eGuillotine[GUILLOTINE_COOLDOWN][1])
-                    engfunc(EngFunc_SetView, id, id)
-                    set_pev(id, pev_flags, pev(id, pev_flags) & ~FL_FROZEN)
-                    set_pev(id, pev_movetype, MOVETYPE_WALK)
-
-                    g_iSilentVictim = id
-                    ExecuteHamB(Ham_Killed, id, id, GIB_ALWAYS)
-                    guillotineCreateHead(eGuillotine)
-                    guillotineSound(eGuillotine[GUILLOTINE_ID], SOUND_SLICE, false)
                     guillotineSetSeq(eGuillotine[GUILLOTINE_ID], GUILLOTINE_SEQ_UP, eGuillotine[GUILLOTINE_FRAMERATE])
 
                     ArraySetArray(g_aGuillotine, iItem, eGuillotine)
@@ -1517,6 +1534,7 @@ public saveData(id)
     if ( !iFile )
         return PLUGIN_HANDLED
 
+    guillotineTerminate()
     for ( new i = 0; i < g_iGuillotine; i ++ )
     {
         ArrayGetArray(g_aGuillotine, i, eGuillotine)
@@ -1644,6 +1662,14 @@ public guillotineGodMode(id)
 
     guillotineSound(id, SOUND_MENU_NAV)
     guillotineMenu(id, MENU_ROOT)
+}
+
+public fwdEmitSound(iEnt, iChannel, const szSample[])
+{
+    if ( g_iSilentVictim && iEnt == g_iSilentVictim )
+        return FMRES_SUPERCEDE
+
+    return FMRES_IGNORED
 }
 
 public fwdUse(iEnt, iCaller, iActivator, iType, Float:fValue)
@@ -1794,12 +1820,7 @@ public fwdKilled(id, iAttacker, bGib)
     }
 
     if ( g_ePlayerData[id][PDATA_GUILLOTINE_HELD] )
-    {
         g_ePlayerData[id][PDATA_GUILLOTINE_HELD] = false
-        g_ePlayerData[id][PDATA_NEXT_DIE] = 0.0
-        set_pev(id, pev_flags, pev(id, pev_flags) & ~FL_FROZEN)
-        set_pev(id, pev_movetype, MOVETYPE_WALK)
-    }
 }
 
 stock guillotineTrace(eGuillotine[GUILLOTINE], id)
@@ -2146,15 +2167,14 @@ stock guillotineReset()
     {
         ArrayGetArray(g_aGuillotine, i, eGuillotine)
         eGuillotine[GUILLOTINE_NEXT_ACTIVE] = 0.0
+        eGuillotine[GUILLOTINE_FLAGS] &= ~FLAG_USED
         ArraySetArray(g_aGuillotine, i, eGuillotine)
     }
 
     for ( new id = 1; id <= g_iMaxPlayers; id ++ )
     {
-        g_ePlayerData[id][PDATA_GUILLOTINE_ID] = 0
         g_ePlayerData[id][PDATA_NEXT_HEAD] = 0.0
         g_ePlayerData[id][PDATA_NEXT_CHECK] = 0.0
-        g_ePlayerData[id][PDATA_NEXT_DIE] = 0.0
     }
 }
 
@@ -2312,6 +2332,7 @@ stock DisableForward()
 
 stock EnableGuillotine()
 {
+    g_iFwdEmitSound = register_forward(FM_EmitSound, "fwdEmitSound")
     EnableHamForward(g_iFwdUse)
     EnableHamForward(g_iFwdObjectCaps)
     EnableHamForward(g_iFwdPostThink)
@@ -2320,6 +2341,7 @@ stock EnableGuillotine()
 
 stock DisableGuillotine()
 {
+    unregister_forward(FM_EmitSound, g_iFwdEmitSound)
     DisableHamForward(g_iFwdUse)
     DisableHamForward(g_iFwdObjectCaps)
     DisableHamForward(g_iFwdPostThink)
