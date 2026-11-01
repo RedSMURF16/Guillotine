@@ -68,7 +68,7 @@
 #define GUILLOTINE_SEQ_UP               1
 #define HEAD_FORWARD_OFFSET             22.5
 #define HEAD_DAMPING_FACTOR             0.825
-#define HEAD_SPEED_TO_STOP                  30.0
+#define HEAD_SPEED_TO_STOP              30.0
 #define HEAD_SPEED_FOR_SOUND            500.0
 #define SOUND_NAV                       "buttons/blip1.wav"
 #define SOUND_REMOVE                    "buttons/button10.wav"
@@ -2078,7 +2078,6 @@ stock guillotineHead(eGuillotine[GUILLOTINE], id, bool:bForced = false)
     guillotineHeadOffset(eGuillotine, id)
     guillotineSetSeq(eGuillotine[GUILLOTINE_ID], GUILLOTINE_SEQ_DOWN, eGuillotine[GUILLOTINE_FRAMERATE])
     eGuillotine[GUILLOTINE_FLAGS] |= FLAG_USED
-    eGuillotine[GUILLOTINE_NEXT_ACTIVE] = get_gametime() + random_float(eGuillotine[GUILLOTINE_COOLDOWN][0], eGuillotine[GUILLOTINE_COOLDOWN][1])
     g_ePlayerData[id][PDATA_GUILLOTINE_ID] = eGuillotine[GUILLOTINE_ID]
     g_ePlayerData[id][PDATA_GUILLOTINE_HELD] = true
     g_ePlayerData[id][PDATA_NEXT_DIE] = get_gametime() + (GUILLOTINE_SEQ_DURATION / g_eSettings[SETTING_DEFAULT_FRAMERATE])
