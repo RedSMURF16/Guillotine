@@ -68,6 +68,8 @@
 #define GUILLOTINE_SEQ_UP               1
 #define HEAD_FORWARD_OFFSET             22.5
 #define HEAD_DAMPING_FACTOR             0.825
+#define HEAD_SPEED_TO_STOP                  30.0
+#define HEAD_SPEED_FOR_SOUND            500.0
 #define SOUND_NAV                       "buttons/blip1.wav"
 #define SOUND_REMOVE                    "buttons/button10.wav"
 #define SOUND_ALERT                     "buttons/bell1.wav"
@@ -128,6 +130,7 @@ enum _:MAIN_SETTINGS
     Array:SETTING_DEFAULT_MODEL_HEAD,
     Array:SETTING_DEFAULT_SOUND,
     Array:SETTING_DEFAULT_SOUND_SLICE,
+    Array:SETTING_DEFAULT_SOUND_FLESH,
     Array:SETTING_DEFAULT_MESSAGE,
     Array:SETTING_DEFAULT_MESSAGE_FORCED,
     SETTING_DEFAULT_FLAGS,
@@ -140,6 +143,7 @@ enum _:MAIN_SETTINGS
     Float:SETTING_DEFAULT_HEAD_LIFE[2],
     bool:SETTING_PLAY_SOUND_ON_DEATH,
     bool:SETTING_WRITE_MESSAGE_ON_DEATH,
+    bool:SETTING_CREATE_HEAD_ON_DEATH,
 
     Float:SETTING_HUD_X,
     Float:SETTING_HUD_Y,
@@ -205,7 +209,8 @@ enum
     SOUND_MENU_REMOVE,
     SOUND_MENU_ALERT,
     SOUND_GUILLOTINE,
-    SOUND_SLICE
+    SOUND_SLICE,
+    SOUND_FLESH
 }
 
 enum
@@ -343,6 +348,7 @@ public plugin_precache()
     g_eSettings[SETTING_DEFAULT_MODEL_HEAD] = ArrayCreate(MAX_RESOURCE_PATH_LENGTH)
     g_eSettings[SETTING_DEFAULT_SOUND] = ArrayCreate(MAX_RESOURCE_PATH_LENGTH)
     g_eSettings[SETTING_DEFAULT_SOUND_SLICE] = ArrayCreate(MAX_RESOURCE_PATH_LENGTH)
+    g_eSettings[SETTING_DEFAULT_SOUND_FLESH] = ArrayCreate(MAX_RESOURCE_PATH_LENGTH)
     g_eSettings[SETTING_DEFAULT_MESSAGE] = ArrayCreate(MAX_RESOURCE_PATH_LENGTH)
     g_eSettings[SETTING_DEFAULT_MESSAGE_FORCED] = ArrayCreate(MAX_RESOURCE_PATH_LENGTH)
 
@@ -357,6 +363,7 @@ public plugin_end()
     ArrayDestroy(g_eSettings[SETTING_DEFAULT_MODEL_HEAD])
     ArrayDestroy(g_eSettings[SETTING_DEFAULT_SOUND])
     ArrayDestroy(g_eSettings[SETTING_DEFAULT_SOUND_SLICE])
+    ArrayDestroy(g_eSettings[SETTING_DEFAULT_SOUND_FLESH])
     ArrayDestroy(g_eSettings[SETTING_DEFAULT_MESSAGE])
     ArrayDestroy(g_eSettings[SETTING_DEFAULT_MESSAGE_FORCED])
 }
@@ -565,6 +572,8 @@ ReadFile()
                             parseSetting(DTYPE_ARRAY_SOUND, szValue, charsmax(szValue), g_eSettings[SETTING_DEFAULT_SOUND], charsmax(g_eSettings[SETTING_DEFAULT_SOUND]))
                         else if ( equali(szKey, "SETTING_DEFAULT_SOUND_SLICE") )
                             parseSetting(DTYPE_ARRAY_SOUND, szValue, charsmax(szValue), g_eSettings[SETTING_DEFAULT_SOUND_SLICE], charsmax(g_eSettings[SETTING_DEFAULT_SOUND_SLICE]))
+                        else if ( equali(szKey, "SETTING_DEFAULT_SOUND_FLESH") )
+                            parseSetting(DTYPE_ARRAY_SOUND, szValue, charsmax(szValue), g_eSettings[SETTING_DEFAULT_SOUND_FLESH], charsmax(g_eSettings[SETTING_DEFAULT_SOUND_FLESH]))
                         else if ( equali(szKey, "SETTING_DEFAULT_MESSAGE") )
                             parseSetting(DTYPE_ARRAY_MESSAGE, szValue, charsmax(szValue), g_eSettings[SETTING_DEFAULT_MESSAGE], charsmax(g_eSettings[SETTING_DEFAULT_MESSAGE]))
                         else if ( equali(szKey, "SETTING_DEFAULT_MESSAGE_FORCED") )
@@ -589,6 +598,8 @@ ReadFile()
                             parseSetting(DTYPE_INT, szValue, charsmax(szValue), g_eSettings[SETTING_PLAY_SOUND_ON_DEATH], charsmax(g_eSettings[SETTING_PLAY_SOUND_ON_DEATH]))
                         else if ( equali(szKey, "SETTING_WRITE_MESSAGE_ON_DEATH") )
                             parseSetting(DTYPE_INT, szValue, charsmax(szValue), g_eSettings[SETTING_WRITE_MESSAGE_ON_DEATH], charsmax(g_eSettings[SETTING_WRITE_MESSAGE_ON_DEATH]))
+                        else if ( equali(szKey, "SETTING_CREATE_HEAD_ON_DEATH") )
+                            parseSetting(DTYPE_INT, szValue, charsmax(szValue), g_eSettings[SETTING_CREATE_HEAD_ON_DEATH], charsmax(g_eSettings[SETTING_CREATE_HEAD_ON_DEATH]))
                         else if ( equali(szKey, "SETTING_HUD_X") )
                             parseSetting(DTYPE_FLOAT, szValue, charsmax(szValue), g_eSettings[SETTING_HUD_X], charsmax(g_eSettings[SETTING_HUD_X]))
                         else if ( equali(szKey, "SETTING_HUD_Y") )
@@ -1378,8 +1389,9 @@ public guillotineTask()
 
                         g_iSilentVictim = id
                         ExecuteHamB(Ham_Killed, id, id, GIB_ALWAYS)
-                        guillotineCreateHead(eGuillotine)
                         guillotineSound(eGuillotine[GUILLOTINE_ID], SOUND_SLICE, false)
+                        if ( g_eSettings[SETTING_CREATE_HEAD_ON_DEATH] )
+                            guillotineCreateHead(eGuillotine)
                     }
 
                     g_ePlayerData[id][PDATA_GUILLOTINE_ID] = 0
@@ -1776,21 +1788,25 @@ public fwdPostThink(id)
 
 public fwdTouch(iEnt, iOther)
 {
-    if ( !pev_valid(iEnt) || pev(iEnt, pev_impulse) != GUILLOTINE_HEAD_KEY )
+    if ( !pev_valid(iEnt)
+    || pev(iEnt, pev_impulse) != GUILLOTINE_HEAD_KEY )
         return FMRES_IGNORED
 
-    new Float:fVelocity[3], Float:fAvelocity[3]
+    new Float:fVelocity[3], Float:fAvelocity[3], Float:fVelo
     pev(iEnt, pev_velocity, fVelocity)
     pev(iEnt, pev_avelocity, fAvelocity)
+    fVelo = xs_vec_len(fVelocity)
 
     xs_vec_mul_scalar(fVelocity, HEAD_DAMPING_FACTOR, fVelocity)
     xs_vec_mul_scalar(fAvelocity, HEAD_DAMPING_FACTOR, fAvelocity)
-    if ( xs_vec_len(fVelocity) < 30.0 )
+    if ( fVelo < HEAD_SPEED_TO_STOP )
     {
         fVelocity = Float:{0.0, 0.0, 0.0}
         fAvelocity = Float:{0.0, 0.0, 0.0}
         set_pev(iEnt, pev_movetype, MOVETYPE_TOSS)
     }
+    else if ( fVelo >= HEAD_SPEED_FOR_SOUND )
+        guillotineSound(iEnt, SOUND_FLESH, false)
 
     set_pev(iEnt, pev_velocity, fVelocity)
     set_pev(iEnt, pev_avelocity, fAvelocity)
@@ -2152,6 +2168,7 @@ stock guillotineSound(iEnt, iSound, bool:bPlayer = true)
         case SOUND_MENU_ALERT:  copy(szSample, charsmax(szSample), SOUND_ALERT)
         case SOUND_GUILLOTINE:  ArrayGetString(g_eSettings[SETTING_DEFAULT_SOUND], random(ArraySize(g_eSettings[SETTING_DEFAULT_SOUND])), szSample, charsmax(szSample))
         case SOUND_SLICE:       ArrayGetString(g_eSettings[SETTING_DEFAULT_SOUND_SLICE], random(ArraySize(g_eSettings[SETTING_DEFAULT_SOUND_SLICE])), szSample, charsmax(szSample))
+        case SOUND_FLESH:       ArrayGetString(g_eSettings[SETTING_DEFAULT_SOUND_FLESH], random(ArraySize(g_eSettings[SETTING_DEFAULT_SOUND_FLESH])), szSample, charsmax(szSample))
     }
 
     if ( bPlayer )
