@@ -63,6 +63,8 @@
 #define VIEW_FORWARD_OFFSET             192.0
 #define VIEW_RIGHT_OFFSET               64.0
 #define VIEW_UP_OFFSET                  32.0
+#define HUD_Y_STEP                      0.025
+#define HUD_Y_MAX                       0.7
 #define GUILLOTINE_SEQ_DURATION         0.858
 #define GUILLOTINE_SEQ_DOWN             0
 #define GUILLOTINE_SEQ_UP               1
@@ -177,8 +179,6 @@ enum _:GUILLOTINE
     Float:GUILLOTINE_ANGLES[3],
     Float:GUILLOTINE_ORIGIN_HEAD[3],
     Float:GUILLOTINE_DIRECTION[3],
-    Float:GUILLOTINE_ORIGIN_VIEW[3],
-    Float:GUILLOTINE_ANGLES_VIEW[3],
     Float:GUILLOTINE_MINS[3],
     Float:GUILLOTINE_MAXS[3],
 
@@ -308,7 +308,7 @@ new Array:g_aGuillotine,
     g_ePlayerData[MAX_PLAYERS + 1][PLAYER_DATA],
     bool:g_bFileWasRead, g_iActivePlayers,
     g_iFwdEmitSound, HamHook:g_iFwdUse, HamHook:g_iFwdObjectCaps, HamHook:g_iFwdPreThink, HamHook:g_iFwdPostThink, HamHook:g_iFwdTouch,
-    g_iGuillotine, g_iGuillotineConfig, g_iBarTime, Float:g_iHudCurrentY,
+    g_iGuillotine, g_iGuillotineConfig, g_iBarTime, Float:g_iHudCurrentY, g_iHudObject_1, g_iHudObject_2, g_iHudObject_3, g_iHudSlot,
     g_iMaxPlayers, g_iSilentVictim
 
 new Float:g_fHeadOffset[] = { 2.5, 0.0, -22.0 }
@@ -333,6 +333,9 @@ public plugin_init()
     g_iFwdTouch = RegisterHam(Ham_Touch, "info_target", "fwdTouch")
     RegisterHam(Ham_Killed, "player", "fwdKilled", 1)
     g_iBarTime = get_user_msgid("BarTime")
+    g_iHudObject_1 = CreateHudSyncObj()
+    g_iHudObject_2 = CreateHudSyncObj()
+    g_iHudObject_3 = CreateHudSyncObj()
     register_logevent("eventRoundStart", 2, "1=Round_Start")
     DisableForward()
     DisableGuillotine()
@@ -415,7 +418,7 @@ public cmdMenu(id, iLevel, iCmd)
 
                 if ( !bFoundGuillotine )
                 {
-                    client_print_color(id, id, "%L %L", id, "GUILLOTINE_CHAT_TAG", id, "GUILLOTINE_CHAT_NO_GALLOWS")
+                    client_print_color(id, id, "%L %L", id, "GUILLOTINE_CHAT_TAG", id, "GUILLOTINE_CHAT_NO_GUILLOTINE")
                     break
                 }
             }
@@ -447,7 +450,7 @@ public cmdMenu(id, iLevel, iCmd)
 
                     if ( !bFoundGuillotine )
                     {
-                        client_print_color(id, id, "%L %L", id, "GUILLOTINE_CHAT_TAG", id, "GUILLOTINE_CHAT_NO_GALLOWS")
+                        client_print_color(id, id, "%L %L", id, "GUILLOTINE_CHAT_TAG", id, "GUILLOTINE_CHAT_NO_GUILLOTINE")
                         break
                     }
                 }
@@ -1477,25 +1480,25 @@ stock guillotineCreateHead(eGuillotine[GUILLOTINE])
 
 stock guillotineCreateView(eGuillotine[GUILLOTINE])
 {
-    new Float:fRight[3], Float:fForward[3], Float:fDirection[3], Float:fFrac
+    new Float:fOrigin[3], Float:fAngles[3], Float:fRight[3], Float:fForward[3], Float:fDirection[3], Float:fFrac
     engfunc(EngFunc_AngleVectors, eGuillotine[GUILLOTINE_ANGLES], fForward, fRight, NULL_VECTOR)
 
     xs_vec_copy(fForward, eGuillotine[GUILLOTINE_DIRECTION])
-    xs_vec_copy(eGuillotine[GUILLOTINE_ORIGIN], eGuillotine[GUILLOTINE_ORIGIN_VIEW])
+    xs_vec_copy(eGuillotine[GUILLOTINE_ORIGIN], fOrigin)
     xs_vec_mul_scalar(fForward, VIEW_FORWARD_OFFSET, fForward)
     xs_vec_mul_scalar(fRight, VIEW_RIGHT_OFFSET, fRight)
-    xs_vec_add(eGuillotine[GUILLOTINE_ORIGIN_VIEW], fForward, eGuillotine[GUILLOTINE_ORIGIN_VIEW])
-    xs_vec_add(eGuillotine[GUILLOTINE_ORIGIN_VIEW], fRight, eGuillotine[GUILLOTINE_ORIGIN_VIEW])
-    eGuillotine[GUILLOTINE_ORIGIN_VIEW][2] += VIEW_UP_OFFSET
+    xs_vec_add(fOrigin, fForward, fOrigin)
+    xs_vec_add(fOrigin, fRight, fOrigin)
+    fOrigin[2] += VIEW_UP_OFFSET
 
-    engfunc(EngFunc_TraceLine, eGuillotine[GUILLOTINE_ORIGIN], eGuillotine[GUILLOTINE_ORIGIN_VIEW], IGNORE_MONSTERS, eGuillotine[GUILLOTINE_ID], 0)
+    engfunc(EngFunc_TraceLine, eGuillotine[GUILLOTINE_ORIGIN], fOrigin, IGNORE_MONSTERS, eGuillotine[GUILLOTINE_ID], 0)
     get_tr2(0, TR_flFraction, fFrac)
     if ( fFrac < 1.0 )
-        get_tr2(0, TR_vecEndPos, eGuillotine[GUILLOTINE_ORIGIN_VIEW])
+        get_tr2(0, TR_vecEndPos, fOrigin)
 
-    eGuillotine[GUILLOTINE_ORIGIN_VIEW][2] -= VIEW_UP_OFFSET
-    xs_vec_sub(eGuillotine[GUILLOTINE_ORIGIN], eGuillotine[GUILLOTINE_ORIGIN_VIEW], fDirection)
-    engfunc(EngFunc_VecToAngles, fDirection, eGuillotine[GUILLOTINE_ANGLES_VIEW])
+    fOrigin[2] -= VIEW_UP_OFFSET
+    xs_vec_sub(eGuillotine[GUILLOTINE_ORIGIN], fOrigin, fDirection)
+    engfunc(EngFunc_VecToAngles, fDirection, fAngles)
     new iView = engfunc(EngFunc_CreateNamedEntity, engfunc(EngFunc_AllocString, "info_target"))
     if ( !pev_valid(iView) )
         return
@@ -1508,8 +1511,8 @@ stock guillotineCreateView(eGuillotine[GUILLOTINE])
     engfunc(EngFunc_SetModel, iView, g_szModelRPG)
     set_pev(iView, pev_rendermode, kRenderTransTexture)
     set_pev(iView, pev_renderamt, 0.0)
-    engfunc(EngFunc_SetOrigin, iView, eGuillotine[GUILLOTINE_ORIGIN_VIEW])
-    set_pev(iView, pev_angles, eGuillotine[GUILLOTINE_ANGLES_VIEW])
+    engfunc(EngFunc_SetOrigin, iView, fOrigin)
+    set_pev(iView, pev_angles, fAngles)
 
     eGuillotine[GUILLOTINE_VIEW] = iView
 }
@@ -2155,7 +2158,7 @@ stock guillotineSelect(eGuillotine[GUILLOTINE], iAction)
 
 stock guillotineMessage(id, bool:bForced = false)
 {
-    new szName[MAX_NAME_LENGTH], szMessage[128]
+    new szName[MAX_NAME_LENGTH], szMessage[128], iHudObject
     get_user_name(id, szName, charsmax(szName))
 
     if ( bForced )
@@ -2163,12 +2166,24 @@ stock guillotineMessage(id, bool:bForced = false)
     else
         ArrayGetString(g_eSettings[SETTING_DEFAULT_MESSAGE], random(ArraySize(g_eSettings[SETTING_DEFAULT_MESSAGE])), szMessage, charsmax(szMessage))
 
+    switch ( g_iHudSlot )
+    {
+        case 0:  iHudObject = g_iHudObject_1
+        case 1:  iHudObject = g_iHudObject_2
+        default: iHudObject = g_iHudObject_3
+    }
+
     set_hudmessage(g_eSettings[SETTING_HUD_COLOR][0], g_eSettings[SETTING_HUD_COLOR][1], g_eSettings[SETTING_HUD_COLOR][2], g_eSettings[SETTING_HUD_X], g_iHudCurrentY,
     g_eSettings[SETTING_HUD_EFFECT], g_eSettings[SETTING_HUD_FXTIME], g_eSettings[SETTING_HUD_HOLDTIME], g_eSettings[SETTING_HUD_FADEIN], g_eSettings[SETTING_HUD_FADEOUT])
-    show_hudmessage(0, "%s%s", szName, szMessage)
-    g_iHudCurrentY += 0.025
-    if ( g_iHudCurrentY >= 0.7 )
+    ShowSyncHudMsg(0, iHudObject, "%s%s", szName, szMessage)
+
+    g_iHudSlot ++
+    g_iHudCurrentY += HUD_Y_STEP
+    if ( g_iHudCurrentY > HUD_Y_MAX )
+    {
         g_iHudCurrentY = g_eSettings[SETTING_HUD_Y]
+        g_iHudSlot = 0
+    }
 }
 
 stock guillotineSound(iEnt, iSound, bool:bPlayer = true)

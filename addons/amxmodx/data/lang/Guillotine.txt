@@ -3,7 +3,6 @@ GUILLOTINE_CHAT_TAG                                = ^4[GUILLOTINE]^1
 GUILLOTINE_CHAT_LIMIT                              = You've reached the maximum number of Guillotines ^4%d
 GUILLOTINE_CHAT_NO_GUILLOTINE                      = There are no Guillotines available
 GUILLOTINE_CHAT_NOT_ALIVE                          = The target player is not alive
-GUILLOTINE_CHAT_NO_GALLOWS                         = There are no available gallows
 GUILLOTINE_CHAT_CREATE_NEW                         = ^3%s ^1created
 GUILLOTINE_CHAT_REMOVE_CURRENT                     = ^3%s ^1removed
 GUILLOTINE_CHAT_REMOVE_ALL                         = All Guillotines removed
