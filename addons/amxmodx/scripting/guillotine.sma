@@ -53,11 +53,13 @@
 #define GUILLOTINE_GHOST_ALPHA          120
 #define GUILLOTINE_ROTATION_STEP        22.5
 #define ADMIN_ACCESS                    ADMIN_RCON
+#define ADMIN_ACCESS_VOTE               ADMIN_USER
 #define PDATA_NEXT_ATTACK               83
 #define XO_CBASEPLAYER                  5
 #define XO_CBASEPLAYERWEAPON            4
 #define GUILLOTINE_KEY                  871002
 #define GUILLOTINE_HEAD_KEY             123123
+#define GUILLOTINE_VOTE_KEY             871003
 #define GUILLOTINE_ARRAY_ITEM           pev_iuser1
 #define SEQ                             60
 #define VIEW_FORWARD_OFFSET             192.0
@@ -147,6 +149,10 @@ enum _:MAIN_SETTINGS
     bool:SETTING_WRITE_MESSAGE_ON_DEATH,
     bool:SETTING_CREATE_HEAD_ON_DEATH,
     bool:SETTING_KILL_ALL_EXCLUDE_CALLER,
+    bool:SETTING_VOTE_ENABLED,
+    Float:SETTING_VOTE_COOLDOWN,
+    Float:SETTING_VOTE_DURATION,
+    Float:SETTING_VOTE_PERCENTAGE,
 
     Float:SETTING_HUD_X,
     Float:SETTING_HUD_Y,
@@ -221,7 +227,9 @@ enum
     MENU_REMOVE,
     MENU_SHOW,
     MENU_STATUS,
-    MENU_ROTATE
+    MENU_ROTATE,
+    MENU_VOTE,
+    MENU_VOTE_CONFIRM
 }
 
 enum
@@ -297,7 +305,9 @@ new g_szMenuHandler[][MAX_VALUE_LENGTH] =
     "menuHandlerRemove",
     "menuHandlerShow",
     "menuHandlerStatus",
-    "menuHandlerRotate"
+    "menuHandlerRotate",
+    "menuHandlerVote",
+    "menuHandlerVoteConfirm"
 }
 
 new g_szCN[] = "guillotine"
@@ -309,6 +319,7 @@ new Array:g_aGuillotine,
     bool:g_bFileWasRead, g_iActivePlayers,
     g_iFwdEmitSound, HamHook:g_iFwdUse, HamHook:g_iFwdObjectCaps, HamHook:g_iFwdPreThink, HamHook:g_iFwdPostThink, HamHook:g_iFwdTouch,
     g_iGuillotine, g_iGuillotineConfig, g_iBarTime, Float:g_iHudCurrentY, g_iHudObject_1, g_iHudObject_2, g_iHudObject_3, g_iHudSlot,
+    g_szVoteTarget[MAX_VALUE_LENGTH], g_iVoteTargetUserid, g_iVoteNo, g_iVoteYes, Float:g_fVoteNext,
     g_iMaxPlayers, g_iSilentVictim
 
 new Float:g_fHeadOffset[] = { 2.5, 0.0, -22.0 }
@@ -322,6 +333,8 @@ public plugin_init()
 
     register_clcmd("say /guillotine",       "cmdMenu", ADMIN_ACCESS, "-- Opens the Guillotine menu.")
     register_clcmd("say_team /guillotine",  "cmdMenu", ADMIN_ACCESS, "-- Opens the Guillotine menu.")
+    register_clcmd("say /guillotine_vote",      "cmdVote", ADMIN_ACCESS_VOTE, "-- Opens the player voting menu.")
+    register_clcmd("say_team /guillotine_vote", "cmdVote", ADMIN_ACCESS_VOTE, "-- Opens the player voting menu.")
     register_concmd("guillotine_reload",  "cmdReload", ADMIN_ACCESS, "-- Reloads the configuration file")
     register_dictionary("Guillotine.txt")
 
@@ -388,7 +401,8 @@ public cmdMenu(id, iLevel, iCmd)
 
     new eGuillotine[GUILLOTINE], bool:bFoundGuillotine
     new iArgIndex = 2
-    new bool:bProcessed[33]
+    new bool:bProcessed[33], Float:fCurrentTime
+    fCurrentTime = get_gametime()
     while ( szTarget[0] )
     {
         if ( equali(szTarget, "all") )
@@ -407,7 +421,8 @@ public cmdMenu(id, iLevel, iCmd)
                 for ( new iItem = 0; iItem < g_iGuillotine; iItem ++ )
                 {
                     ArrayGetArray(g_aGuillotine, iItem, eGuillotine)
-                    if ( eGuillotine[GUILLOTINE_FLAGS] & FLAG_USED )
+                    if ( eGuillotine[GUILLOTINE_FLAGS] & FLAG_USED
+                    || fCurrentTime < eGuillotine[GUILLOTINE_NEXT_ACTIVE] )
                         continue
 
                     guillotineHead(eGuillotine, iTarget, true)
@@ -425,7 +440,7 @@ public cmdMenu(id, iLevel, iCmd)
         }
         else
         {
-            new iTarget = cmd_target(id, szTarget, CMDTARGET_OBEY_IMMUNITY | CMDTARGET_ALLOW_SELF)
+            new iTarget = cmd_target(id, szTarget, CMDTARGET_ALLOW_SELF)
             if ( iTarget && !bProcessed[iTarget] )
             {
                 bProcessed[iTarget] = true
@@ -439,7 +454,8 @@ public cmdMenu(id, iLevel, iCmd)
                     for ( new iItem = 0; iItem < g_iGuillotine; iItem ++ )
                     {
                         ArrayGetArray(g_aGuillotine, iItem, eGuillotine)
-                        if ( eGuillotine[GUILLOTINE_FLAGS] & FLAG_USED )
+                        if ( eGuillotine[GUILLOTINE_FLAGS] & FLAG_USED
+                        || fCurrentTime < eGuillotine[GUILLOTINE_NEXT_ACTIVE] )
                             continue
 
                         guillotineHead(eGuillotine, iTarget, true)
@@ -474,6 +490,40 @@ public cmdReload(id, iLevel, iCmd)
     ReadFile()
     console_print(id, "The configuration file has been reloaded successfully !")
 
+    return PLUGIN_HANDLED
+}
+
+public cmdVote(id, iLevel, iCmd)
+{
+    if ( !cmd_access(id, iLevel, iCmd, 1) )
+        return PLUGIN_HANDLED
+
+    if ( !g_eSettings[SETTING_VOTE_ENABLED] )
+    {
+        client_print_color(id, id, "%L %L", id, "GUILLOTINE_CHAT_TAG", id, "GUILLOTINE_CHAT_VOTE_DISABLED")
+        return PLUGIN_HANDLED
+    }
+
+    if ( task_exists(GUILLOTINE_VOTE_KEY)
+    || get_gametime() < g_fVoteNext )
+    {
+        client_print_color(id, id, "%L %L", id, "GUILLOTINE_CHAT_TAG", id, "GUILLOTINE_CHAT_VOTE_COOLDOWN")
+        return PLUGIN_HANDLED
+    }
+
+    new iAlive
+    for ( new iPlayer = 1; iPlayer <= g_iMaxPlayers; iPlayer ++ )
+        if ( is_user_alive(iPlayer) )
+            iAlive ++
+
+    if ( !iAlive )
+    {
+        client_print_color(id, id, "%L %L", id, "GUILLOTINE_CHAT_TAG", id, "GUILLOTINE_CHAT_VOTE_NO_TARGETS")
+        return PLUGIN_HANDLED
+    }
+
+    guillotineSound(id, SOUND_MENU_NAV)
+    guillotineMenu(id, MENU_VOTE)
     return PLUGIN_HANDLED
 }
 
@@ -606,6 +656,14 @@ ReadFile()
                             parseSetting(DTYPE_INT, szValue, charsmax(szValue), g_eSettings[SETTING_CREATE_HEAD_ON_DEATH], charsmax(g_eSettings[SETTING_CREATE_HEAD_ON_DEATH]))
                         else if ( equali(szKey, "SETTING_KILL_ALL_EXCLUDE_CALLER") )
                             parseSetting(DTYPE_INT, szValue, charsmax(szValue), g_eSettings[SETTING_KILL_ALL_EXCLUDE_CALLER], charsmax(g_eSettings[SETTING_KILL_ALL_EXCLUDE_CALLER]))
+                        else if ( equali(szKey, "SETTING_VOTE_ENABLED") )
+                            parseSetting(DTYPE_INT, szValue, charsmax(szValue), g_eSettings[SETTING_VOTE_ENABLED], charsmax(g_eSettings[SETTING_VOTE_ENABLED]))
+                        else if ( equali(szKey, "SETTING_VOTE_COOLDOWN") )
+                            parseSetting(DTYPE_FLOAT, szValue, charsmax(szValue), g_eSettings[SETTING_VOTE_COOLDOWN], charsmax(g_eSettings[SETTING_VOTE_COOLDOWN]))
+                        else if ( equali(szKey, "SETTING_VOTE_DURATION") )
+                            parseSetting(DTYPE_FLOAT, szValue, charsmax(szValue), g_eSettings[SETTING_VOTE_DURATION], charsmax(g_eSettings[SETTING_VOTE_DURATION]))
+                        else if ( equali(szKey, "SETTING_VOTE_PERCENTAGE") )
+                            parseSetting(DTYPE_FLOAT, szValue, charsmax(szValue), g_eSettings[SETTING_VOTE_PERCENTAGE], charsmax(g_eSettings[SETTING_VOTE_PERCENTAGE]))
                         else if ( equali(szKey, "SETTING_HUD_X") )
                             parseSetting(DTYPE_FLOAT, szValue, charsmax(szValue), g_eSettings[SETTING_HUD_X], charsmax(g_eSettings[SETTING_HUD_X]))
                         else if ( equali(szKey, "SETTING_HUD_Y") )
@@ -662,7 +720,7 @@ public client_disconnected(id)
     if ( g_ePlayerData[id][PDATA_GUILLOTINE_GHOST]
     && (iItem = guillotineGet(eGuillotine, g_ePlayerData[id][PDATA_GUILLOTINE_GHOST])) != -1 )
     {
-        guillotineKill(eGuillotine[GUILLOTINE_ID])
+        guillotineKill(eGuillotine)
         guillotineRemove(iItem)
     }
 
@@ -706,6 +764,8 @@ stock guillotineMenu(id, iType)
         case MENU_SHOW:             { menuShow(id, iMenu);          format(szData, charsmax(szData), "%s^n%L", szData, id, "GUILLOTINE_ROOT_SHOW"); }
         case MENU_STATUS:           { menuStatus(id, iMenu);        format(szData, charsmax(szData), "%s^n%L", szData, id, "GUILLOTINE_ROOT_STATUS"); }
         case MENU_ROTATE:           { menuRotate(id, iMenu);        format(szData, charsmax(szData), "%s^n%L", szData, id, "GUILLOTINE_ROOT_ROTATE"); }
+        case MENU_VOTE:             { menuVote(id, iMenu);          format(szData, charsmax(szData), "%s^n%L", szData, id, "GUILLOTINE_ROOT_VOTE"); }
+        case MENU_VOTE_CONFIRM:     { menuVoteConfirm(id, iMenu);   format(szData, charsmax(szData), "%s^n%L", szData, id, "GUILLOTINE_ROOT_VOTE_CONFIRM", g_szVoteTarget); }
     }
 
     if ( menu_pages(iMenu) > 1 )
@@ -950,7 +1010,7 @@ public menuHandlerRemove(id, menu, item)
         {
             eGuillotine[GUILLOTINE_FLAGS] &= ~FLAG_ACTIVE
             guillotineSetState(eGuillotine)
-            guillotineKill(eGuillotine[GUILLOTINE_ID])
+            guillotineKill(eGuillotine)
             guillotineRemove(g_ePlayerData[id][PDATA_GUILLOTINE_MENU])
 
             client_print_color(id, id, "%L %L", id, "GUILLOTINE_CHAT_TAG", id, "GUILLOTINE_CHAT_REMOVE_CURRENT", eGuillotine[GUILLOTINE_NAME])
@@ -967,7 +1027,7 @@ public menuHandlerRemove(id, menu, item)
                 eGuillotine[GUILLOTINE_FLAGS] &= ~FLAG_ACTIVE
 
                 guillotineSetState(eGuillotine)
-                guillotineKill(eGuillotine[GUILLOTINE_ID])
+                guillotineKill(eGuillotine)
                 guillotineRemove(0)
             }
 
@@ -1327,7 +1387,7 @@ public menuHandlerRotate(id, menu, item)
         }
         case MENU_EXIT:
         {
-            guillotineKill(eGuillotine[GUILLOTINE_ID])
+            guillotineKill(eGuillotine)
             guillotineRemove(iItem)
             DisableAction(id)
             set_pdata_float(id, PDATA_NEXT_ATTACK, 0.0, XO_CBASEPLAYER, XO_CBASEPLAYER)
@@ -1338,7 +1398,7 @@ public menuHandlerRotate(id, menu, item)
         }
         default:
         {
-            guillotineKill(eGuillotine[GUILLOTINE_ID])
+            guillotineKill(eGuillotine)
             guillotineRemove(iItem)
             DisableAction(id)
             set_pdata_float(id, PDATA_NEXT_ATTACK, 0.0, XO_CBASEPLAYER, XO_CBASEPLAYER)
@@ -1348,6 +1408,123 @@ public menuHandlerRotate(id, menu, item)
 
     menu_destroy(menu)
     return PLUGIN_HANDLED
+}
+
+public menuVote(id, iMenu)
+{
+    new szName[MAX_NAME_LENGTH], szInfo[8]
+    for ( new iPlayer = 1; iPlayer <= g_iMaxPlayers; iPlayer ++ )
+    {
+        if ( !is_user_alive(iPlayer) )
+            continue
+
+        get_user_name(iPlayer, szName, charsmax(szName))
+        num_to_str(get_user_userid(iPlayer), szInfo, charsmax(szInfo))
+        menu_additem(iMenu, szName, szInfo)
+    }
+
+    return PLUGIN_HANDLED
+}
+
+public menuHandlerVote(id, menu, item)
+{
+    if ( item == MENU_EXIT )
+    {
+        menu_destroy(menu)
+        return PLUGIN_HANDLED
+    }
+
+    new szInfo[8]
+    menu_item_getinfo(menu, item, _, szInfo, charsmax(szInfo))
+
+    new iUserid = str_to_num(szInfo)
+    new iPlayer = find_player("k", iUserid)
+    if ( !iPlayer || !is_user_alive(iPlayer) )
+    {
+        client_print_color(id, id, "%L %L", id, "GUILLOTINE_CHAT_TAG", id, "GUILLOTINE_CHAT_NOT_ALIVE")
+        menu_destroy(menu)
+        return PLUGIN_HANDLED
+    }
+
+    g_iVoteNo = 0
+    g_iVoteYes = 0
+    g_iVoteTargetUserid = iUserid
+    get_user_name(iPlayer, g_szVoteTarget, charsmax(g_szVoteTarget))
+    set_task(g_eSettings[SETTING_VOTE_DURATION], "taskVoteEnd", GUILLOTINE_VOTE_KEY)
+    for ( new iTarget = 1; iTarget <= g_iMaxPlayers; iTarget ++ )
+    {
+        if ( !is_user_connected(iTarget) )
+            continue
+
+        guillotineSound(iTarget, SOUND_MENU_NAV)
+        guillotineMenu(iTarget, MENU_VOTE_CONFIRM)
+    }
+
+    menu_destroy(menu)
+    return PLUGIN_HANDLED
+}
+
+public menuVoteConfirm(id, menu)
+{
+    new szItem[128]
+    formatex(szItem, charsmax(szItem), "%L", id, "GUILLOTINE_VOTE_YES")
+    menu_additem(menu, szItem)
+
+    formatex(szItem, charsmax(szItem), "%L", id, "GUILLOTINE_VOTE_NO")
+    menu_additem(menu, szItem)
+}
+
+public menuHandlerVoteConfirm(id, menu, item)
+{
+    if ( item == MENU_EXIT )
+    {
+        menu_destroy(menu)
+        return PLUGIN_HANDLED
+    }
+
+    if ( item == 0 )    g_iVoteYes ++
+    else                g_iVoteNo ++
+
+    menu_destroy(menu)
+    return PLUGIN_HANDLED
+}
+
+public taskVoteEnd()
+{
+    new iTotal = g_iVoteYes + g_iVoteNo
+    new Float:fPercentage
+
+    if ( iTotal )
+        fPercentage = float(g_iVoteYes) / float(iTotal)
+
+    new iTarget = find_player("k", g_iVoteTargetUserid)
+    if ( iTotal && fPercentage >= g_eSettings[SETTING_VOTE_PERCENTAGE]
+    && iTarget && is_user_alive(iTarget) )
+    {
+        new eGuillotine[GUILLOTINE], bool:bFoundGuillotine
+        for ( new iItem = 0; iItem < g_iGuillotine; iItem ++ )
+        {
+            ArrayGetArray(g_aGuillotine, iItem, eGuillotine)
+            if ( eGuillotine[GUILLOTINE_FLAGS] & FLAG_USED )
+                continue
+
+            guillotineHead(eGuillotine, iTarget, true)
+            ArraySetArray(g_aGuillotine, iItem, eGuillotine)
+            bFoundGuillotine = true
+            break
+        }
+
+        if ( bFoundGuillotine )
+            client_print_color(0, 0, "%L %L", LANG_PLAYER, "GUILLOTINE_CHAT_TAG", LANG_PLAYER, "GUILLOTINE_CHAT_VOTE_PASSED", g_szVoteTarget)
+        else
+            client_print_color(0, 0, "%L %L", LANG_PLAYER, "GUILLOTINE_CHAT_TAG", LANG_PLAYER, "GUILLOTINE_CHAT_NO_GUILLOTINE")
+    }
+    else
+    {
+        client_print_color(0, 0, "%L %L", LANG_PLAYER, "GUILLOTINE_CHAT_TAG", LANG_PLAYER, "GUILLOTINE_CHAT_VOTE_FAILED", g_szVoteTarget)
+    }
+
+    g_fVoteNext = get_gametime() + g_eSettings[SETTING_VOTE_COOLDOWN]
 }
 
 public guillotineTask()
@@ -1361,7 +1538,8 @@ public guillotineTask()
         {
             if ( fCurrentTime >= g_ePlayerData[id][PDATA_NEXT_HEAD] )
             {
-                if ( (iItem = guillotineGet(eGuillotine, g_ePlayerData[id][PDATA_GUILLOTINE_ID])) != -1 )
+                if ( (iItem = guillotineGet(eGuillotine, g_ePlayerData[id][PDATA_GUILLOTINE_ID])) != -1
+                && !(eGuillotine[GUILLOTINE_FLAGS] & FLAG_USED) )
                 {
                     g_ePlayerData[id][PDATA_GUILLOTINE_ID] = 0
                     g_ePlayerData[id][PDATA_NEXT_HEAD] = 0.0
@@ -1386,7 +1564,6 @@ public guillotineTask()
                     if ( eGuillotine[GUILLOTINE_FLAGS] & FLAG_USED && is_user_alive(id) )
                     {
                         engfunc(EngFunc_SetView, id, id)
-                        set_pev(id, pev_flags, pev(id, pev_flags) & ~FL_FROZEN)
                         set_pev(id, pev_movetype, MOVETYPE_WALK)
 
                         g_iSilentVictim = id
@@ -1824,7 +2001,7 @@ public fwdKilled(id, iAttacker, bGib)
         new eGuillotine[GUILLOTINE], iItem
         if ( (iItem = guillotineGet(eGuillotine, g_ePlayerData[id][PDATA_GUILLOTINE_GHOST])) != -1 )
         {
-            guillotineKill(eGuillotine[GUILLOTINE_ID])
+            guillotineKill(eGuillotine)
             guillotineRemove(iItem)
         }
 
@@ -2099,7 +2276,6 @@ stock guillotineHead(eGuillotine[GUILLOTINE], id, bool:bForced = false)
     g_ePlayerData[id][PDATA_GUILLOTINE_HELD] = true
     g_ePlayerData[id][PDATA_NEXT_DIE] = get_gametime() + (GUILLOTINE_SEQ_DURATION / g_eSettings[SETTING_DEFAULT_FRAMERATE])
     set_pev(id, pev_movetype, MOVETYPE_NONE)
-    set_pev(id, pev_flags, pev(id, pev_flags) | FL_FROZEN)
     engfunc(EngFunc_SetView, id, eGuillotine[GUILLOTINE_VIEW])
 
     if ( g_eSettings[SETTING_WRITE_MESSAGE_ON_DEATH] )
@@ -2112,7 +2288,9 @@ stock guillotineHead(eGuillotine[GUILLOTINE], id, bool:bForced = false)
 
 public guillotineRemoveHead(iTask)
 {
-    guillotineKill(iTask - GUILLOTINE_HEAD_KEY)
+    new iEnt = iTask - GUILLOTINE_HEAD_KEY
+    if ( pev_valid(iEnt) )
+        set_pev(iEnt, pev_flags, pev(iEnt, pev_flags) | FL_KILLME)
 }
 
 stock guillotineBar(id, iDuration)
@@ -2242,10 +2420,13 @@ stock bool:isGuillotine(iEnt)
     return pev_valid(iEnt) && pev(iEnt, pev_impulse) == GUILLOTINE_KEY
 }
 
-stock guillotineKill(iEnt)
+stock guillotineKill(eGuillotine[GUILLOTINE])
 {
-    if ( pev_valid(iEnt) )
-        set_pev(iEnt, pev_flags, pev(iEnt, pev_flags) | FL_KILLME)
+    if ( pev_valid(eGuillotine[GUILLOTINE_ID]) )
+        set_pev(eGuillotine[GUILLOTINE_ID], pev_flags, pev(eGuillotine[GUILLOTINE_ID], pev_flags) | FL_KILLME)
+
+    if ( pev_valid(eGuillotine[GUILLOTINE_VIEW]) )
+        set_pev(eGuillotine[GUILLOTINE_VIEW], pev_flags, pev(eGuillotine[GUILLOTINE_VIEW], pev_flags) | FL_KILLME)
 }
 
 stock parseSetting(iType, szValue[], iValueLen, any:aOutput[], iOutputLength)

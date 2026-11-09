@@ -13,6 +13,11 @@ GUILLOTINE_CHAT_SHOW_ALL_HIDDEN                    = All Guillotines are now Hid
 GUILLOTINE_CHAT_STATUS_CURRENT                     = ^3%s ^1is %L
 GUILLOTINE_CHAT_STATUS_ALL_ENABLED                 = All Guillotines are now Enabled
 GUILLOTINE_CHAT_STATUS_ALL_DISABLED                = All Guillotines are now Disabled
+GUILLOTINE_CHAT_VOTE_DISABLED                      = Voting is disabled
+GUILLOTINE_CHAT_VOTE_COOLDOWN                      = Wait a little longer before starting another vote
+GUILLOTINE_CHAT_VOTE_FAILED                        = The vote to execute ^3%s ^1has failed
+GUILLOTINE_CHAT_VOTE_PASSED                        = The vote to execute ^3%s ^1has passed
+GUILLOTINE_CHAT_VOTE_NO_TARGETS                    = There are no alive players to vote for
 
 GUILLOTINE_CHAT_SHOWN                              = Shown
 GUILLOTINE_CHAT_HIDDEN                             = Hidden
@@ -39,6 +44,8 @@ GUILLOTINE_ROOT_STATUS                             = Status Settings
 GUILLOTINE_ROOT_NOCLIP                             = Status Noclip %L
 GUILLOTINE_ROOT_GODMODE                            = Status Godmode %L
 GUILLOTINE_ROOT_ROTATE                             = Adjust Rotation
+GUILLOTINE_ROOT_VOTE                               = Select a player to execute
+GUILLOTINE_ROOT_VOTE_CONFIRM                       = Execute \y%s\d?
 
 GUILLOTINE_EDIT_SHOW                               = Edit Visibility
 GUILLOTINE_EDIT_STATUS                             = Edit Status
@@ -58,3 +65,6 @@ GUILLOTINE_ROTATE_UP                               = Turn Up
 GUILLOTINE_ROTATE_DOWN                             = Turn Down
 GUILLOTINE_ROTATE_GROUND                           = Set on ground >> %L
 GUILLOTINE_ROTATE_PLACE                            = Place Guillotine
+
+GUILLOTINE_VOTE_YES                                = \wYes
+GUILLOTINE_VOTE_NO                                 = \wNo
