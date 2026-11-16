@@ -17,6 +17,10 @@ This plugin adds placeable Guillotines to Counter-Strike 1.6, allowing players t
 - Save and load Guillotine placements per map
 - Configure default behavior and create custom Guillotine presets
 
+## 📋 Requirements
+- ReGameDLL
+- AMX Mod X 1.10+
+
 ## ⚙️ Configuration
 ```ini
 # To add a new Guillotine, follow the example below:
