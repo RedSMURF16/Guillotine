@@ -1,7 +1,7 @@
 <h1 align="center">Guillotine</h1>
 
 <p align="center">
-  <a href="https://www.youtube.com/watch?v=00OLCHlmpps"><img src="https://img.youtube.com/vi/00OLCHlmpps/maxresdefault.jpg" alt="Watch on YouTube" width="600"></a>
+  <img src="images/demo.gif" alt="Guillotine">
 </p>
 
 ## 📝 Description
